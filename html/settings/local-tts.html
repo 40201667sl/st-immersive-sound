@@ -1,0 +1,70 @@
+<div class="st-is-tab-content" id="st-is-tab-local-tts">
+    <div class="st-is-settings-section">
+        <h3>本地 TTS</h3>
+
+        <div class="st-is-field">
+            <label>
+                <input type="checkbox" id="st-is-local-tts-enabled">
+                启用本地 TTS
+            </label>
+        </div>
+
+        <div class="st-is-field">
+            <label for="st-is-local-tts-base-url">手机转发器地址</label>
+            <input type="text" id="st-is-local-tts-base-url" placeholder="例如：http://192.168.1.8:4244">
+        </div>
+
+        <div class="st-is-field">
+            <button type="button" class="st-is-btn" id="st-is-local-tts-sync-engines">同步引擎</button>
+            <button type="button" class="st-is-btn secondary" id="st-is-local-tts-save">保存设置</button>
+        </div>
+
+        <div class="st-is-field">
+            <label for="st-is-local-tts-engine">本地引擎</label>
+            <select id="st-is-local-tts-engine"></select>
+        </div>
+
+        <div class="st-is-field">
+            <button type="button" class="st-is-btn" id="st-is-local-tts-sync-voices">同步音色</button>
+        </div>
+
+        <div class="st-is-field">
+            <label for="st-is-local-tts-voice">本地音色</label>
+            <select id="st-is-local-tts-voice"></select>
+        </div>
+
+        <div class="st-is-field">
+            <label for="st-is-local-tts-rate">语速</label>
+            <input type="number" id="st-is-local-tts-rate" min="1" max="100" value="50">
+        </div>
+
+        <div class="st-is-field">
+            <label for="st-is-local-tts-pitch">音调</label>
+            <input type="number" id="st-is-local-tts-pitch" min="1" max="300" value="100">
+        </div>
+
+        <div class="st-is-field">
+            <button type="button" class="st-is-btn" id="st-is-local-tts-add-speaker">添加为插件音色</button>
+        </div>
+    </div>
+
+    <div class="st-is-settings-section">
+        <h4>已添加的本地音色</h4>
+        <div id="st-is-local-tts-speaker-list"></div>
+    </div>
+
+    <div class="st-is-settings-section">
+        <h4>测试朗读</h4>
+        <div class="st-is-field">
+            <textarea id="st-is-local-tts-test-text" rows="3">你好，这是本地 TTS 测试。</textarea>
+        </div>
+        <div class="st-is-field">
+            <button type="button" class="st-is-btn" id="st-is-local-tts-test">播放测试</button>
+        </div>
+        <audio id="st-is-local-tts-audio" controls></audio>
+    </div>
+
+    <div class="st-is-settings-section">
+        <div id="st-is-local-tts-status" class="st-is-help-text"></div>
+    </div>
+</div>
