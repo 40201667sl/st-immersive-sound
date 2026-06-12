@@ -55,7 +55,10 @@ export function saveLocalTtsConfig(patch = {}) {
 }
 
 function normalizeBaseUrl(baseUrl) {
-    return String(baseUrl || '').trim().replace(/\/+$/, '');
+    const rawUrl = String(baseUrl || '').trim();
+    if (!rawUrl) return '';
+    const withProtocol = /^https?:\/\//i.test(rawUrl) ? rawUrl : `http://${rawUrl}`;
+    return withProtocol.replace(/\/+$/, '');
 }
 
 function makeUrl(baseUrl, path, params = {}) {
@@ -68,8 +71,23 @@ function makeUrl(baseUrl, path, params = {}) {
     return url.toString();
 }
 
+async function fetchWithTimeout(url, options = {}, timeout = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            throw new Error('连接手机 TTS 转发器超时。');
+        }
+        throw new Error('连接手机 TTS 转发器失败，请检查地址、网络和转发器是否已启动。');
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function fetchJson(url, errorLabel) {
-    const response = await fetch(url, { method: 'GET', mode: 'cors' });
+    const response = await fetchWithTimeout(url, { method: 'GET', mode: 'cors' });
     if (!response.ok) {
         const text = await response.text().catch(() => '');
         throw new Error(`${errorLabel}失败：HTTP ${response.status}${text ? `，${text}` : ''}`);
@@ -167,7 +185,7 @@ export async function fetchLocalTtsAudio({ baseUrl, text, engine, voice, rate, p
         pitch: pitch || 100,
         voice,
     });
-    const response = await fetch(url, { method: 'GET', mode: 'cors' });
+    const response = await fetchWithTimeout(url, { method: 'GET', mode: 'cors' }, 15000);
     if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         throw new Error(`本地 TTS 合成失败：HTTP ${response.status}${errorText ? `，${errorText}` : ''}`);

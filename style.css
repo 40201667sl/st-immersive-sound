@@ -1888,3 +1888,66 @@
 .st-is-request-card-select-item .st-is-select {
     width: 100%;
 }
+
+#st-is-tab-local-tts .st-is-local-tts-status {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: 8px 0 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--st-is-border-color);
+    border-radius: 6px;
+    background: var(--st-is-bg-secondary);
+    color: var(--st-is-text-primary);
+}
+
+#st-is-tab-local-tts .st-is-local-tts-status[data-type="error"] {
+    border-color: var(--st-is-danger-secondary);
+    color: var(--st-is-danger-text);
+    background: var(--st-is-danger-primary);
+}
+
+#st-is-tab-local-tts .st-is-local-tts-input {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+#st-is-tab-local-tts .st-is-local-tts-number {
+    flex: 0 0 96px;
+}
+
+#st-is-tab-local-tts .st-is-btn:disabled,
+#st-is-tab-local-tts .st-is-btn.is-loading {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+#st-is-tab-local-tts .st-is-local-tts-speaker-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--st-is-border-color);
+}
+
+@media (max-width: 768px) {
+    #st-is-tab-local-tts .st-is-field {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    #st-is-tab-local-tts .st-is-btn,
+    #st-is-tab-local-tts .st-is-local-tts-input,
+    #st-is-tab-local-tts .st-is-local-tts-number,
+    #st-is-tab-local-tts audio {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #st-is-tab-local-tts .st-is-local-tts-speaker-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}

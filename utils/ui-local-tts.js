@@ -27,6 +27,49 @@ function setStatus(message, type = 'info') {
     el.dataset.type = type;
 }
 
+function getErrorMessage(error) {
+    if (!error) return '操作失败，请检查手机转发器是否已经启动。';
+    const message = error?.message || String(error);
+    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+        return '连接手机转发器失败，请确认手机和酒馆在同一网络、转发器已启动，并且地址填写正确。';
+    }
+    if (message.includes('AbortError')) {
+        return '连接手机转发器超时，请确认转发器已启动后再试。';
+    }
+    return message;
+}
+
+function createPlaceholderOption(text) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = text;
+    option.disabled = true;
+    option.selected = true;
+    return option;
+}
+
+async function runWithButton(button, busyText, action) {
+    const originalText = button?.textContent;
+    if (button) {
+        button.disabled = true;
+        button.classList.add('is-loading');
+        button.textContent = busyText;
+    }
+
+    try {
+        return await action();
+    } catch (error) {
+        setStatus(getErrorMessage(error), 'error');
+        return null;
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.classList.remove('is-loading');
+            button.textContent = originalText;
+        }
+    }
+}
+
 function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({
         '&': '&amp;',
@@ -42,6 +85,11 @@ function fillEngines(engines, selectedEngine) {
     if (!select) return;
     select.innerHTML = '';
 
+    if (!engines.length) {
+        select.append(createPlaceholderOption('请先同步引擎'));
+        return;
+    }
+
     engines.forEach((engine) => {
         const option = document.createElement('option');
         option.value = engine.name || '';
@@ -55,6 +103,11 @@ function fillVoices(voices, selectedVoice) {
     const select = getEl('st-is-local-tts-voice');
     if (!select) return;
     select.innerHTML = '';
+
+    if (!voices.length) {
+        select.append(createPlaceholderOption('请先同步音色'));
+        return;
+    }
 
     voices.forEach((voice) => {
         const option = document.createElement('option');
@@ -98,18 +151,17 @@ function renderSpeakerList() {
             <button type="button" class="st-is-btn secondary st-is-local-tts-remove">移除</button>
         </div>
     `).join('');
+}
 
-    list.querySelectorAll('.st-is-local-tts-remove').forEach((button) => {
-        button.addEventListener('click', () => {
-            const row = button.closest('.st-is-local-tts-speaker-row');
-            const name = decodeURIComponent(row.dataset.speaker);
-            const nextSpeakers = { ...(getLocalTtsConfig().speakers || {}) };
-            delete nextSpeakers[name];
-            saveLocalTtsConfig({ speakers: nextSpeakers });
-            renderSpeakerList();
-            setStatus('已移除本地音色。');
-        });
-    });
+function removeSpeaker(button) {
+    const row = button.closest('.st-is-local-tts-speaker-row');
+    if (!row) return;
+    const name = decodeURIComponent(row.dataset.speaker);
+    const nextSpeakers = { ...(getLocalTtsConfig().speakers || {}) };
+    delete nextSpeakers[name];
+    saveLocalTtsConfig({ speakers: nextSpeakers });
+    renderSpeakerList();
+    setStatus('已移除本地音色。');
 }
 
 function readFormPatch() {
@@ -139,10 +191,14 @@ async function syncEngines() {
     saveLocalTtsConfig(patch);
     setStatus('正在连接手机 TTS 转发器...');
     const engines = await fetchLocalTtsEngines(patch.baseUrl);
-    const engine = patch.engine || engines[0]?.name || '';
+    const engine = engines.some((item) => item.name === patch.engine) ? patch.engine : engines[0]?.name || '';
     saveLocalTtsConfig({ ...patch, engines, engine });
     fillEngines(engines, engine);
-    setStatus('引擎同步完成。');
+    if (!engines.length) {
+        setStatus('没有同步到本地引擎，请确认手机 TTS 服务已启动。', 'error');
+        return;
+    }
+    setStatus(`引擎同步完成，共 ${engines.length} 个。`);
     if (engine) {
         await syncVoices();
     }
@@ -153,10 +209,14 @@ async function syncVoices() {
     saveLocalTtsConfig(patch);
     setStatus('正在同步本地音色...');
     const voices = await fetchLocalTtsVoices(patch.engine, patch.baseUrl);
-    const voice = patch.voice || voices[0]?.name || '';
+    const voice = voices.some((item) => item.name === patch.voice) ? patch.voice : voices[0]?.name || '';
     saveLocalTtsConfig({ ...patch, voices, voice });
     fillVoices(voices, voice);
-    setStatus('本地音色同步完成。');
+    if (!voices.length) {
+        setStatus('没有同步到本地音色，请确认手机 TTS 里已经导入语音包。', 'error');
+        return;
+    }
+    setStatus(`本地音色同步完成，共 ${voices.length} 个。`);
 }
 
 function addCurrentVoice() {
@@ -182,7 +242,8 @@ function addCurrentVoice() {
         },
     });
 
-    getEl('st-is-local-tts-enabled').checked = true;
+    const enabledInput = getEl('st-is-local-tts-enabled');
+    if (enabledInput) enabledInput.checked = true;
     renderSpeakerList();
     setStatus(`已添加本地音色：${name}`);
     return config;
@@ -202,6 +263,9 @@ async function testCurrentVoice() {
     });
     const blob = new Blob([arrayBuffer], { type: mime || 'audio/x-wav' });
     const audio = getEl('st-is-local-tts-audio');
+    if (!audio) {
+        throw new Error('没有找到测试播放器。');
+    }
     audio.src = URL.createObjectURL(blob);
     await audio.play();
     setStatus('测试音频已播放。');
@@ -224,30 +288,44 @@ export function initLocalTtsSettings() {
 
     loadForm();
 
-    getEl('st-is-local-tts-save')?.addEventListener('click', () => {
-        saveLocalTtsConfig(readFormPatch());
-        setStatus('本地 TTS 设置已保存。');
+    root.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button || !root.contains(button)) return;
+
+        if (button.classList.contains('st-is-local-tts-remove')) {
+            removeSpeaker(button);
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-save') {
+            saveLocalTtsConfig(readFormPatch());
+            setStatus('本地 TTS 设置已保存。');
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-sync-engines') {
+            runWithButton(button, '同步中...', syncEngines);
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-sync-voices') {
+            runWithButton(button, '同步中...', syncVoices);
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-add-speaker') {
+            addCurrentVoice();
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-test') {
+            runWithButton(button, '播放中...', testCurrentVoice);
+        }
     });
 
-    getEl('st-is-local-tts-sync-engines')?.addEventListener('click', () => {
-        syncEngines().catch((error) => setStatus(error?.message || String(error), 'error'));
-    });
-
-    getEl('st-is-local-tts-sync-voices')?.addEventListener('click', () => {
-        syncVoices().catch((error) => setStatus(error?.message || String(error), 'error'));
-    });
-
-    getEl('st-is-local-tts-add-speaker')?.addEventListener('click', addCurrentVoice);
-
-    getEl('st-is-local-tts-test')?.addEventListener('click', () => {
-        testCurrentVoice().catch((error) => setStatus(error?.message || String(error), 'error'));
-    });
-
-    getEl('st-is-local-tts-engine')?.addEventListener('change', () => {
-        saveLocalTtsConfig(readFormPatch());
-    });
-
-    getEl('st-is-local-tts-voice')?.addEventListener('change', () => {
-        saveLocalTtsConfig(readFormPatch());
+    root.addEventListener('change', (event) => {
+        if (event.target.matches('input, select, textarea')) {
+            saveLocalTtsConfig(readFormPatch());
+        }
     });
 }
