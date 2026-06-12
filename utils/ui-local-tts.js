@@ -12,6 +12,14 @@ function getEl(id) {
     return document.getElementById(id);
 }
 
+let localTtsRetryCount = 0;
+
+function retryInitLocalTtsSettings() {
+    if (localTtsRetryCount >= 20 || typeof window === 'undefined') return;
+    localTtsRetryCount += 1;
+    window.setTimeout(initLocalTtsSettings, 250);
+}
+
 function setStatus(message, type = 'info') {
     const el = getEl('st-is-local-tts-status');
     if (!el) return;
@@ -200,7 +208,19 @@ async function testCurrentVoice() {
 }
 
 export function initLocalTtsSettings() {
-    if (!getEl('st-is-local-tts-enabled')) return;
+    const enabledInput = getEl('st-is-local-tts-enabled');
+    if (!enabledInput) {
+        retryInitLocalTtsSettings();
+        return;
+    }
+
+    const root = getEl('st-is-tab-local-tts') || enabledInput.closest('.st-is-tab-content');
+    if (root?.dataset.localTtsBound === 'true') {
+        loadForm();
+        return;
+    }
+    if (root) root.dataset.localTtsBound = 'true';
+    localTtsRetryCount = 0;
 
     loadForm();
 
