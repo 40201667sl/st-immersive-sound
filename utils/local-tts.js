@@ -4,6 +4,7 @@ import { extensionName } from './config.js';
 
 export const LOCAL_TTS_RESOURCE_ID = 'local-tts-forwarder';
 export const LOCAL_TTS_API_CONFIG_NAME = '本地 TTS';
+export const DEFAULT_TTS_CHARACTER_MATCHING_PROFILE = '默认';
 
 const DEFAULT_LOCAL_TTS = {
     enabled: false,
@@ -81,10 +82,96 @@ export function saveLocalTtsConfig(patch = {}) {
 
     if (root.local_tts.enabled) {
         root.current_tts_provider = 'doubao';
+        root.voice_tts_provider = 'doubao';
     }
 
     saveSettingsDebounced();
     return root.local_tts;
+}
+
+function ensureTtsCharacterMatchingProfiles(root = getRootSettings()) {
+    if (!root.tts_character_matching_profiles || typeof root.tts_character_matching_profiles !== 'object') {
+        root.tts_character_matching_profiles = {
+            [DEFAULT_TTS_CHARACTER_MATCHING_PROFILE]: '在这里使用自然语言描述音色和角色的匹配关系',
+        };
+    }
+
+    const firstProfile = getFirstObjectKey(root.tts_character_matching_profiles) || DEFAULT_TTS_CHARACTER_MATCHING_PROFILE;
+    if (!root.current_tts_character_matching_profile || !root.tts_character_matching_profiles[root.current_tts_character_matching_profile]) {
+        root.current_tts_character_matching_profile = firstProfile;
+    }
+
+    return {
+        profiles: root.tts_character_matching_profiles,
+        currentProfile: root.current_tts_character_matching_profile,
+    };
+}
+
+export function getTtsCharacterMatchingState() {
+    const { profiles, currentProfile } = ensureTtsCharacterMatchingProfiles();
+    return {
+        profiles: { ...profiles },
+        currentProfile,
+        rules: profiles[currentProfile] || '',
+    };
+}
+
+export function setTtsCharacterMatchingProfile(name) {
+    const root = getRootSettings();
+    const { profiles } = ensureTtsCharacterMatchingProfiles(root);
+    if (name && profiles[name] !== undefined) {
+        root.current_tts_character_matching_profile = name;
+    }
+    saveSettingsDebounced();
+    return getTtsCharacterMatchingState();
+}
+
+export function saveTtsCharacterMatchingProfile(name, rules) {
+    const root = getRootSettings();
+    ensureTtsCharacterMatchingProfiles(root);
+    const profileName = String(name || root.current_tts_character_matching_profile || DEFAULT_TTS_CHARACTER_MATCHING_PROFILE).trim() || DEFAULT_TTS_CHARACTER_MATCHING_PROFILE;
+    root.tts_character_matching_profiles[profileName] = String(rules || '');
+    root.current_tts_character_matching_profile = profileName;
+    saveSettingsDebounced();
+    return getTtsCharacterMatchingState();
+}
+
+export function deleteTtsCharacterMatchingProfile(name) {
+    const root = getRootSettings();
+    const { profiles } = ensureTtsCharacterMatchingProfiles(root);
+    const profileNames = Object.keys(profiles);
+    if (profileNames.length <= 1) {
+        throw new Error('至少保留一个匹配设定。');
+    }
+    if (!profiles[name]) {
+        throw new Error('没有找到要删除的匹配设定。');
+    }
+
+    delete profiles[name];
+    root.current_tts_character_matching_profile = Object.keys(profiles)[0] || DEFAULT_TTS_CHARACTER_MATCHING_PROFILE;
+    saveSettingsDebounced();
+    return getTtsCharacterMatchingState();
+}
+
+export function importTtsCharacterMatchingProfiles(profileData = {}) {
+    const root = getRootSettings();
+    ensureTtsCharacterMatchingProfiles(root);
+    const profiles = profileData.profiles && typeof profileData.profiles === 'object' ? profileData.profiles : profileData;
+    let imported = 0;
+
+    Object.entries(profiles || {}).forEach(([name, rules]) => {
+        if (!name) return;
+        root.tts_character_matching_profiles[name] = typeof rules === 'string' ? rules : JSON.stringify(rules, null, 2);
+        imported += 1;
+    });
+
+    const currentProfile = profileData.currentProfile || profileData.current_tts_character_matching_profile;
+    if (currentProfile && root.tts_character_matching_profiles[currentProfile]) {
+        root.current_tts_character_matching_profile = currentProfile;
+    }
+
+    saveSettingsDebounced();
+    return { ...getTtsCharacterMatchingState(), imported };
 }
 
 function normalizeBaseUrl(baseUrl) {

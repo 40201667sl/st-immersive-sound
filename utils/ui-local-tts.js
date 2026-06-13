@@ -1,13 +1,19 @@
 import {
     LOCAL_TTS_RESOURCE_ID,
     buildLocalSpeakerName,
+    buildLocalTtsReadableText,
     fetchLocalTtsAudio,
     fetchLocalTtsEngines,
     fetchLocalTtsVoices,
     formatLocalVoiceLabel,
     getLocalTtsConfig,
+    getTtsCharacterMatchingState,
+    importTtsCharacterMatchingProfiles,
+    deleteTtsCharacterMatchingProfile,
     removeLocalTtsSpeakerFromMainTts,
     saveLocalTtsConfig,
+    saveTtsCharacterMatchingProfile,
+    setTtsCharacterMatchingProfile,
     syncLocalTtsSpeakersToMainTts,
 } from './local-tts.js';
 
@@ -219,6 +225,85 @@ function renderSpeakerList() {
     `).join('');
 }
 
+function fillLocalCharMatchProfiles(state = getTtsCharacterMatchingState()) {
+    const select = getEl('st-is-local-tts-char-match-profile-select');
+    const editor = getEl('st-is-local-tts-char-match-rules-editor');
+    if (!select || !editor) return;
+
+    select.innerHTML = '';
+    Object.keys(state.profiles || {}).forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        if (name === state.currentProfile) option.selected = true;
+        select.append(option);
+    });
+
+    editor.value = state.rules || '';
+}
+
+function loadLocalCharMatchSettings() {
+    if (!getEl('st-is-local-tts-char-match-profile-select')) return;
+    fillLocalCharMatchProfiles();
+}
+
+function saveLocalCharMatchCurrent(profileName = null) {
+    const select = getEl('st-is-local-tts-char-match-profile-select');
+    const editor = getEl('st-is-local-tts-char-match-rules-editor');
+    const name = profileName || select?.value || '默认';
+    const state = saveTtsCharacterMatchingProfile(name, editor?.value || '');
+    fillLocalCharMatchProfiles(state);
+    setStatus(`本地 TTS 角色匹配设定「${name}」已保存。`);
+}
+
+function downloadJson(filename, data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+function exportLocalCharMatchProfile(exportAll = false) {
+    const state = getTtsCharacterMatchingState();
+    if (exportAll) {
+        downloadJson('本地TTS角色匹配设定-全部.json', {
+            profiles: state.profiles,
+            currentProfile: state.currentProfile,
+        });
+        setStatus('已导出全部本地 TTS 角色匹配设定。');
+        return;
+    }
+
+    const name = getEl('st-is-local-tts-char-match-profile-select')?.value || state.currentProfile;
+    downloadJson(`本地TTS角色匹配设定-${name}.json`, { [name]: state.profiles[name] || '' });
+    setStatus(`已导出角色匹配设定：${name}`);
+}
+
+function importLocalCharMatchProfiles() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = JSON.parse(await file.text());
+            const state = importTtsCharacterMatchingProfiles(data);
+            fillLocalCharMatchProfiles(state);
+            setStatus(`已导入 ${state.imported} 个本地 TTS 角色匹配设定。`);
+        } catch (error) {
+            setStatus(`导入失败：${getErrorMessage(error)}`, 'error');
+        }
+    });
+    input.click();
+}
+
 function removeSpeaker(button) {
     const row = button.closest('.st-is-local-tts-speaker-row');
     if (!row) return;
@@ -251,6 +336,7 @@ function loadForm() {
     fillEngines(config.engines || [], config.engine);
     fillVoices(config.voices || [], config.voice);
     renderSpeakerList();
+    loadLocalCharMatchSettings();
 }
 
 function readMainFormPatch() {
@@ -455,10 +541,12 @@ function addMainCurrentVoice() {
 async function testCurrentVoice() {
     const patch = readFormPatch();
     const text = getEl('st-is-local-tts-test-text')?.value || '你好，这是本地 TTS 测试。';
+    const contextText = getEl('st-is-local-tts-test-context')?.value || '';
+    const spokenText = buildLocalTtsReadableText({ text, context_texts: contextText });
     setStatus('正在合成本地测试音频...');
     const { arrayBuffer, mime } = await fetchLocalTtsAudio({
         baseUrl: patch.baseUrl,
-        text,
+        text: spokenText,
         engine: patch.engine,
         voice: patch.voice,
         rate: patch.rate,
@@ -526,12 +614,65 @@ export function initLocalTtsSettings() {
             return;
         }
 
+        if (button.id === 'st-is-local-tts-char-match-save') {
+            saveLocalCharMatchCurrent();
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-char-match-save-as') {
+            const name = prompt('请输入新的匹配设定名称：');
+            if (name && name.trim()) {
+                saveLocalCharMatchCurrent(name.trim());
+            }
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-char-match-import') {
+            importLocalCharMatchProfiles();
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-char-match-export') {
+            exportLocalCharMatchProfile(false);
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-char-match-export-all') {
+            exportLocalCharMatchProfile(true);
+            return;
+        }
+
+        if (button.id === 'st-is-local-tts-char-match-delete') {
+            const name = getEl('st-is-local-tts-char-match-profile-select')?.value;
+            if (name && confirm(`确认删除匹配设定「${name}」吗？`)) {
+                try {
+                    const state = deleteTtsCharacterMatchingProfile(name);
+                    fillLocalCharMatchProfiles(state);
+                    setStatus(`已删除匹配设定：${name}`);
+                } catch (error) {
+                    setStatus(getErrorMessage(error), 'error');
+                }
+            }
+            return;
+        }
+
         if (button.id === 'st-is-local-tts-test') {
             runWithButton(button, '播放中...', testCurrentVoice);
         }
     });
 
     root.addEventListener('change', (event) => {
+        if (event.target.id === 'st-is-local-tts-char-match-profile-select') {
+            const state = setTtsCharacterMatchingProfile(event.target.value);
+            fillLocalCharMatchProfiles(state);
+            setStatus(`已切换匹配设定：${state.currentProfile}`);
+            return;
+        }
+
+        if (event.target.id === 'st-is-local-tts-char-match-rules-editor') {
+            return;
+        }
+
         if (event.target.matches('input, select, textarea')) {
             saveLocalTtsConfig(readFormPatch());
         }
