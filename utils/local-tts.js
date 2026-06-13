@@ -192,12 +192,53 @@ export function mergeLocalTtsSpeakers(speakers = []) {
     return Array.from(merged.values());
 }
 
-export function findLocalTtsSpeaker(name) {
-    return getLocalTtsSpeakers().find((speaker) => speaker.name === name) || null;
+function getRequestResourceId(request = {}) {
+    return request.resource_id || request.resourceId || request.metadata?.resource_id || request.metadata?.resourceId || '';
+}
+
+function matchesLocalTtsSpeaker(speaker, identifier) {
+    if (!speaker || !identifier) return false;
+    return speaker.name === identifier || speaker.speaker_id === identifier || speaker.voice === identifier;
+}
+
+export function findLocalTtsSpeaker(identifier, request = {}) {
+    const speakers = getLocalTtsSpeakers();
+    const metadataSpeaker = request.metadata?.speaker || request.speaker_name || '';
+    return speakers.find((speaker) => (
+        matchesLocalTtsSpeaker(speaker, identifier)
+        || matchesLocalTtsSpeaker(speaker, metadataSpeaker)
+    )) || null;
 }
 
 export function isLocalTtsRequest(request = {}) {
-    return Boolean(findLocalTtsSpeaker(request.speaker) || request.resource_id === LOCAL_TTS_RESOURCE_ID);
+    if (!getLocalTtsConfig().enabled) return false;
+
+    return Boolean(
+        findLocalTtsSpeaker(request.speaker, request)
+        || getRequestResourceId(request) === LOCAL_TTS_RESOURCE_ID
+    );
+}
+
+function normalizeContextTexts(contextTexts) {
+    const values = Array.isArray(contextTexts) ? contextTexts : [contextTexts];
+    const normalized = values
+        .flatMap((value) => {
+            if (value === undefined || value === null) return [];
+            if (typeof value === 'string') return value.split(/\n+/);
+            if (typeof value === 'object') return [value.text || value.content || value.description || JSON.stringify(value)];
+            return [String(value)];
+        })
+        .map((value) => String(value).replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+    return [...new Set(normalized)].join('；').slice(0, 120);
+}
+
+export function buildLocalTtsReadableText(request = {}) {
+    const text = String(request.text || '').trim();
+    const emotionText = normalizeContextTexts(request.context_texts || request.contextTexts || request.metadata?.context_texts);
+    if (!text || !emotionText || text.includes(emotionText)) return text;
+    return `（${emotionText}）${text}`;
 }
 
 export function syncLocalTtsSpeakersToMainTts(speakerNames = null) {
@@ -268,14 +309,14 @@ export async function fetchLocalTtsAudio({ baseUrl, text, engine, voice, rate, p
 
 export async function requestLocalTtsAudio(request = {}) {
     const config = getLocalTtsConfig();
-    const speaker = findLocalTtsSpeaker(request.speaker);
+    const speaker = findLocalTtsSpeaker(request.speaker, request);
     if (!speaker) {
         throw new Error(`没有找到本地 TTS 音色：${request.speaker || '未指定'}`);
     }
 
     return fetchLocalTtsAudio({
         baseUrl: config.baseUrl,
-        text: request.text,
+        text: buildLocalTtsReadableText(request),
         engine: speaker.engine || config.engine,
         voice: speaker.voice || config.voice,
         rate: config.rate,

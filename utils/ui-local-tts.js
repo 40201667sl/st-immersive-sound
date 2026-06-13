@@ -419,7 +419,7 @@ function addCurrentVoice() {
     if (enabledInput) enabledInput.checked = true;
     renderSpeakerList();
     syncSpeakerToMainList(name);
-    setAllStatus(`已添加到主音色列表：${name}。角色匹配和 LLM 文本提取会继续生效。`);
+    setAllStatus(`已添加到主音色列表：${name}。角色匹配和大模型文本提取会继续生效。`);
     return config;
 }
 
@@ -448,7 +448,7 @@ function addMainCurrentVoice() {
 
     renderSpeakerList();
     syncSpeakerToMainList(name);
-    setAllStatus(`已添加到主音色列表：${name}。角色匹配和 LLM 文本提取会继续生效。`);
+    setAllStatus(`已添加到主音色列表：${name}。角色匹配和大模型文本提取会继续生效。`);
     return config;
 }
 

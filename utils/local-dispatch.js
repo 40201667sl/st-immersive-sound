@@ -1,4 +1,4 @@
-import { requestLocalTtsAudio } from './local-tts.js';
+import { buildLocalTtsReadableText, requestLocalTtsAudio } from './local-tts.js';
 
 export async function initiateLocalTtsRequest(request = {}, hooks = {}) {
     const {
@@ -13,7 +13,8 @@ export async function initiateLocalTtsRequest(request = {}, hooks = {}) {
         throw new Error('本地 TTS 缓存入口未初始化。');
     }
 
-    const cacheKey = request.cacheKey || `local-tts:${request.speaker || 'default'}:${request.text || ''}`;
+    const spokenText = buildLocalTtsReadableText(request);
+    const cacheKey = request.cacheKey || `local-tts:${request.speaker || 'default'}:${spokenText}`;
     const cachedItem = getTtsItem?.(cacheKey);
     if (cachedItem?.status === 'ready' && !force) {
         return cachedItem;
@@ -22,6 +23,7 @@ export async function initiateLocalTtsRequest(request = {}, hooks = {}) {
     addOrUpdateTtsItem(cacheKey, {
         cacheKey,
         text: request.text,
+        local_tts_spoken_text: spokenText,
         context_texts: request.context_texts,
         speaker: request.speaker,
         speaker_name: request.speaker,
@@ -47,6 +49,7 @@ export async function initiateLocalTtsRequest(request = {}, hooks = {}) {
             audioBlob,
             audioUrl,
             text: request.text,
+            local_tts_spoken_text: spokenText,
             context_texts: request.context_texts,
             speaker: request.speaker,
             speaker_name: request.speaker,
