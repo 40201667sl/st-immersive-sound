@@ -67,11 +67,57 @@
             <select id="tts_resource_id_select" class="st-is-select">
                 <option value="seed-tts-2.0">合成音频</option>
                 <option value="seed-icl-2.0">复刻音频</option>
+                <option value="local-tts-forwarder">本地 TTS（手机语音包）</option>
             </select>
         </div>
         <div class="st-is-field-col">
             <label for="tts_speaker_description">音色简介</label>
             <textarea id="tts_speaker_description" class="st-is-textarea" rows="3" placeholder="输入音色简介..."></textarea>
+        </div>
+
+        <hr class="st-is-hr">
+
+        <h4>本地 TTS 音色同步</h4>
+        <div id="st-is-main-local-tts-root">
+            <div id="st-is-main-local-tts-status" class="st-is-help-text st-is-local-tts-status">从这里同步手机语音包，添加后会出现在上方音色配置里。</div>
+
+            <div class="st-is-field">
+                <label for="st-is-main-local-tts-base-url">手机转发器地址</label>
+                <input type="text" class="st-is-text-input st-is-local-tts-input" id="st-is-main-local-tts-base-url" placeholder="例如：http://192.168.1.8:4244">
+            </div>
+
+            <div class="st-is-field">
+                <button type="button" class="st-is-btn" id="st-is-main-local-tts-sync-engines">同步引擎</button>
+                <button type="button" class="st-is-btn secondary" id="st-is-main-local-tts-sync-voices">同步音色</button>
+            </div>
+
+            <div class="st-is-field">
+                <label for="st-is-main-local-tts-engine">本地引擎</label>
+                <select id="st-is-main-local-tts-engine" class="st-is-select st-is-local-tts-input"></select>
+            </div>
+
+            <div class="st-is-field">
+                <label for="st-is-main-local-tts-voice">本地音色</label>
+                <select id="st-is-main-local-tts-voice" class="st-is-select st-is-local-tts-input"></select>
+            </div>
+
+            <div class="st-is-grid">
+                <div class="st-is-field-col">
+                    <label for="st-is-main-local-tts-rate">语速</label>
+                    <input type="number" class="st-is-text-input st-is-local-tts-number" id="st-is-main-local-tts-rate" min="1" max="100" value="50">
+                </div>
+                <div class="st-is-field-col">
+                    <label for="st-is-main-local-tts-pitch">音调</label>
+                    <input type="number" class="st-is-text-input st-is-local-tts-number" id="st-is-main-local-tts-pitch" min="1" max="300" value="100">
+                </div>
+            </div>
+
+            <div class="st-is-field">
+                <button type="button" class="st-is-btn" id="st-is-main-local-tts-add-speaker">
+                    <i class="fa-solid fa-microphone-lines"></i>
+                    添加到上方音色配置
+                </button>
+            </div>
         </div>
     </div>
 

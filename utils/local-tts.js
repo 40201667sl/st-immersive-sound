@@ -3,6 +3,7 @@ import { saveSettingsDebounced } from '../../../../../script.js';
 import { extensionName } from './config.js';
 
 export const LOCAL_TTS_RESOURCE_ID = 'local-tts-forwarder';
+export const LOCAL_TTS_API_CONFIG_NAME = '本地 TTS';
 
 const DEFAULT_LOCAL_TTS = {
     enabled: false,
@@ -21,6 +22,38 @@ function getRootSettings() {
         extension_settings[extensionName] = {};
     }
     return extension_settings[extensionName];
+}
+
+function getFirstObjectKey(value) {
+    return Object.keys(value || {})[0] || '';
+}
+
+function ensureCurrentTtsApiConfig(root = getRootSettings()) {
+    root.tts_profiles = root.tts_profiles || {};
+
+    const profileName = root.current_tts_profile || getFirstObjectKey(root.tts_profiles) || '默认';
+    root.current_tts_profile = profileName;
+    root.tts_profiles[profileName] = root.tts_profiles[profileName] || {
+        current_api_config: LOCAL_TTS_API_CONFIG_NAME,
+        api_configs: {},
+    };
+
+    const profile = root.tts_profiles[profileName];
+    profile.api_configs = profile.api_configs || {};
+
+    const apiName = profile.current_api_config || getFirstObjectKey(profile.api_configs) || LOCAL_TTS_API_CONFIG_NAME;
+    profile.current_api_config = apiName;
+    profile.api_configs[apiName] = {
+        app_id: '',
+        access_key: '',
+        synthesis_quota: -1,
+        clone_quota: -1,
+        speakers: {},
+        ...(profile.api_configs[apiName] || {}),
+    };
+    profile.api_configs[apiName].speakers = profile.api_configs[apiName].speakers || {};
+
+    return { profileName, profile, apiName, apiConfig: profile.api_configs[apiName] };
 }
 
 export function getLocalTtsConfig() {
@@ -164,7 +197,44 @@ export function findLocalTtsSpeaker(name) {
 }
 
 export function isLocalTtsRequest(request = {}) {
-    return Boolean(findLocalTtsSpeaker(request.speaker));
+    return Boolean(findLocalTtsSpeaker(request.speaker) || request.resource_id === LOCAL_TTS_RESOURCE_ID);
+}
+
+export function syncLocalTtsSpeakersToMainTts(speakerNames = null) {
+    const targetNames = Array.isArray(speakerNames) ? new Set(speakerNames) : null;
+    const speakers = getLocalTtsSpeakers().filter((speaker) => !targetNames || targetNames.has(speaker.name));
+    if (!speakers.length) {
+        throw new Error('没有可同步的本地音色，请先同步手机音色并添加。');
+    }
+
+    const { apiName, apiConfig } = ensureCurrentTtsApiConfig();
+    speakers.forEach((speaker) => {
+        apiConfig.speakers[speaker.name] = {
+            ...(apiConfig.speakers[speaker.name] || {}),
+            speaker_id: speaker.voice || speaker.speaker_id || speaker.name,
+            resource_id: LOCAL_TTS_RESOURCE_ID,
+            description: speaker.description || '本地 TTS 转发器音色',
+            engine: speaker.engine || '',
+            voice: speaker.voice || '',
+            local_tts: true,
+        };
+    });
+
+    saveSettingsDebounced();
+    return { apiName, count: speakers.length, speakers };
+}
+
+export function removeLocalTtsSpeakerFromMainTts(speakerName) {
+    const root = getRootSettings();
+    Object.values(root.tts_profiles || {}).forEach((profile) => {
+        Object.values(profile?.api_configs || {}).forEach((apiConfig) => {
+            const speaker = apiConfig?.speakers?.[speakerName];
+            if (speaker?.resource_id === LOCAL_TTS_RESOURCE_ID) {
+                delete apiConfig.speakers[speakerName];
+            }
+        });
+    });
+    saveSettingsDebounced();
 }
 
 export async function fetchLocalTtsAudio({ baseUrl, text, engine, voice, rate, pitch }) {
